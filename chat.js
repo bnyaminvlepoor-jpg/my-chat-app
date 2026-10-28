@@ -23,6 +23,9 @@ const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecogni
 let recognition = null;
 let isListening = false;
 
+// شناسه‌ی گفتگو: یک بار ساخته می‌شود تا حافظه کار کند
+const sessionId = crypto.randomUUID();
+
 if (SpeechRecognition) {
     recognition = new SpeechRecognition();
     recognition.lang = 'fa-IR';
@@ -183,6 +186,15 @@ resizeChat.addEventListener('click', () => {
 
 chatMessages.addEventListener('click', (event) => {
     if (!(event.target instanceof Element)) return;
+    const copyButton = event.target.closest('[data-chat-copy]');
+    if (copyButton) {
+        const message = copyButton.closest('[data-chat-message]')?.querySelector('[data-message-content]');
+        if (!message) return;
+
+        copyChatMessage(copyButton, message);
+        return;
+    }
+
     const promptButton = event.target.closest('[data-chat-prompt]');
     if (!promptButton) return;
 
@@ -196,48 +208,42 @@ chatForm.addEventListener('submit', async (e) => {
     const message = userInput.value.trim();
     if (!message) return;
 
-    // ۱. اضافه کردن پیام کاربر به صفحه
     appendMessage(message, 'user');
     userInput.value = '';
 
-    // ۲. فعال کردن انیمیشن تایپ کردن دستیار
     typingIndicator.classList.remove('hidden');
     chatMessages.scrollTop = chatMessages.scrollHeight;
 
     try {
-        // ۳. ارتباط واقعی با کارخانه هوش مصنوعی n8n شما
-        // (در مسیر تمرینی n8n از webhook-test و در نسخه نهایی از webhook استفاده کنید)
-        const response = await fetch("https://brv1234.app.n8n.cloud/webhook/966c118e-2424-48f8-8bf1-cedca5c2c85a", {
+        // دقت کن: اگر در حساب جدیدت آدرس وب‌هوک عوض شده، این لینک را آپدیت کن
+        const response = await fetch("https://borhan-dev.app.n8n.cloud/webhook/966c118e-2424-48f8-8bf1-cedca5c2c85a", {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
                 user_request: message,
-                name_user: "مشتری وب‌سایت"
+                name_user: "مشتری وب‌سایت",
+                user_feedback: "",
+                session_id: sessionId
             })
         });
 
-        const data = await response.json();
+        if (!response.ok) throw new Error("خطای سرور: " + response.status);
 
-        // غیرفعال کردن انیمیشن تایپ
+        const data = await response.json();
         typingIndicator.classList.add('hidden');
 
-        // ۴. اضافه کردن جواب دریافتی به صفحه چت
         if (data.output) {
             appendMessage(data.output, 'ai');
         } else {
-            appendMessage("متاسفانه نتونستم پاسخ رو دریافت کنم. دوباره تلاش کنید.", 'ai');
+            appendMessage("متأسفانه نتوانستم پاسخ را دریافت کنم. دوباره تلاش کنید.", 'ai');
         }
-
     } catch (error) {
         typingIndicator.classList.add('hidden');
-        // برای تست لوکال، در صورت نبود اینترنت یا خطا، یک شبیه‌سازی انجام می‌دهد:
-        setTimeout(() => {
-            appendMessage("سلام! اتصال من به کارخانه n8n قطع شده، اما طرحِ زیبای چت رو درست اجرا کردی. 😍 حالا باید n8n رو روشن کنی تا پاسخ‌های هوش مصنوعی رو زنده ببینی!", 'ai');
-        }, 1000);
+        console.error(error);
+        appendMessage("ارتباط با سرور برقرار نشد. دوباره تلاش کنید.", 'ai');
     }
 });
 
-// تابع ساختن حباب‌های چت در صفحه
 function setChatExpanded(isExpanded) {
     chatWindow.classList.toggle('chat-window-expanded', isExpanded);
     resizeChat.setAttribute('aria-pressed', String(isExpanded));
@@ -246,15 +252,23 @@ function setChatExpanded(isExpanded) {
     resizeChat.querySelector('i').className = `fa-solid ${isExpanded ? 'fa-compress' : 'fa-expand'} text-sm`;
 }
 
+// تابع ساختن حباب‌های چت در صفحه
 function appendMessage(text, sender) {
     const wrapper = document.createElement('div');
+    const messageGroup = document.createElement('div');
+    messageGroup.dataset.chatMessage = '';
+    messageGroup.className = 'flex min-w-0 flex-col items-start gap-1';
 
     if (sender === 'user') {
         wrapper.className = "flex gap-2 items-start justify-end max-w-[85%] self-end mr-auto";
         const messageBubble = document.createElement('div');
         messageBubble.className = "bg-gradient-to-tr from-purple-600 to-indigo-600 text-white p-3 rounded-2xl rounded-tl-none leading-relaxed";
+        messageBubble.dataset.messageContent = '';
         messageBubble.textContent = text;
-        wrapper.appendChild(messageBubble);
+        messageGroup.append(messageBubble, createCopyButton());
+        wrapper.appendChild(messageGroup);
+        chatMessages.appendChild(wrapper);
+        chatMessages.scrollTop = chatMessages.scrollHeight;
     } else {
         wrapper.className = "flex gap-2 items-start justify-start max-w-[85%]";
         const avatar = document.createElement('div');
@@ -264,15 +278,89 @@ function appendMessage(text, sender) {
         avatar.appendChild(icon);
 
         const messageBubble = document.createElement('div');
-
         messageBubble.className = "bg-slate-900 border border-slate-800 text-slate-100 p-3 rounded-2xl rounded-tr-none leading-relaxed [&_ul]:list-disc [&_ul]:mr-6 [&_ol]:list-decimal [&_ol]:mr-6 [&_li]:mb-2";
+        messageBubble.dataset.messageContent = '';
 
+        // اول حباب خالی را در صفحه می‌گذاریم و بعد ماشین‌تحریر را روشن می‌کنیم
+        messageGroup.append(messageBubble, createCopyButton());
+        wrapper.append(avatar, messageGroup);
+        chatMessages.appendChild(wrapper);
+        chatMessages.scrollTop = chatMessages.scrollHeight;
 
-
-        messageBubble.innerHTML = marked.parse(text);
-        wrapper.append(avatar, messageBubble);
+        typeWriterEffect(text, messageBubble, 20);
     }
-
-    chatMessages.appendChild(wrapper);
-    chatMessages.scrollTop = chatMessages.scrollHeight;
 }
+
+// موتور ماشین‌تحریر (استریم زنده همراه با حفظ بولد و لیست‌ها)
+function typeWriterEffect(text, element, speed = 20) {
+    let i = 0;
+    element.innerHTML = '';
+
+    function type() {
+        if (i < text.length) {
+            i++;
+            // برش متن تا حرفِ فعلی و تبدیل زنده‌ی آن به فرمت زیبای مارک‌داون
+            element.innerHTML = marked.parse(text.slice(0, i));
+            chatMessages.scrollTop = chatMessages.scrollHeight;
+            setTimeout(type, speed);
+        }
+    }
+    type();
+}
+
+function createCopyButton() {
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.dataset.chatCopy = '';
+    button.setAttribute('aria-label', 'کپی پیام');
+    button.title = 'کپی پیام';
+    button.className = 'chat-copy-button inline-flex h-7 w-7 items-center justify-center self-start rounded-lg border border-slate-700/70 bg-slate-800/70 text-slate-400 shadow-sm transition hover:border-purple-400/50 hover:bg-purple-500/15 hover:text-purple-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-purple-400 active:scale-95';
+    button.innerHTML = '<i class="fa-regular fa-copy text-xs" aria-hidden="true"></i>';
+    return button;
+}
+
+async function copyChatMessage(button, message) {
+    try {
+        await navigator.clipboard.writeText(message.innerText);
+        button.setAttribute('aria-label', 'پیام کپی شد');
+        button.title = 'پیام کپی شد';
+        button.innerHTML = '<i class="fa-solid fa-check text-xs" aria-hidden="true"></i>';
+    } catch (error) {
+        button.setAttribute('aria-label', 'کپی پیام انجام نشد');
+        button.title = 'کپی پیام انجام نشد';
+        button.innerHTML = '<i class="fa-solid fa-circle-exclamation text-xs" aria-hidden="true"></i>';
+        console.error('Could not copy the chat message:', error);
+    } finally {
+        setTimeout(() => {
+            button.setAttribute('aria-label', 'کپی پیام');
+            button.title = 'کپی پیام';
+            button.innerHTML = '<i class="fa-regular fa-copy text-xs" aria-hidden="true"></i>';
+        }, 1500);
+    }
+}
+
+const themeToggle = document.getElementById("themeToggle");
+const themeToggleIcon = document.getElementById("themeToggleIcon");
+
+function setTheme(theme) {
+    document.documentElement.dataset.theme = theme;
+    document.body.dataset.theme = theme;
+
+    const isLight = theme === "light";
+    themeToggle.setAttribute("aria-pressed", String(isLight));
+    themeToggle.setAttribute("aria-label", isLight ? "تغییر به حالت تاریک" : "تغییر به حالت روشن");
+    themeToggle.setAttribute("title", isLight ? "تغییر به حالت تاریک" : "تغییر به حالت روشن");
+    themeToggleIcon.classList.toggle("fa-moon", !isLight);
+    themeToggleIcon.classList.toggle("fa-sun", isLight);
+
+    try {
+        localStorage.setItem("borhan-theme", theme);
+    } catch (error) {
+        console.warn("ذخیرهٔ انتخاب تم در دسترس نیست.", error);
+    }
+}
+
+setTheme(document.documentElement.dataset.theme === "light" ? "light" : "dark");
+themeToggle.addEventListener("click", () => {
+    setTheme(document.body.dataset.theme === "light" ? "dark" : "light");
+});
