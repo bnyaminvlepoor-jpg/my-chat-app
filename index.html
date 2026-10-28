@@ -447,10 +447,15 @@
                 <div class="w-7 h-7 bg-purple-600/20 rounded-lg border border-purple-500/20 flex items-center justify-center shrink-0">
                     <i class="fa-solid fa-robot text-xs text-purple-400"></i>
                 </div>
-                <div class="bg-slate-900 border border-slate-800 text-slate-100 p-3 rounded-2xl rounded-tr-none leading-relaxed">
-                    <p>سلام! من دستیار هوشمند برهان هستم. 🤖</p>
-                    <p class="mt-2 text-xs text-slate-300">می‌توانم درباره طراحی وب، اتوماسیون با n8n، اتصال سرویس‌ها و APIها، یا شکل‌دادن به ایده و سفارش پروژه راهنمایی‌ات کنم.</p>
-                    <p class="mt-2 text-xs text-slate-400">برای پاسخ دقیق‌تر، هدفت و ابزارهایی را که استفاده می‌کنی بگو؛ لطفاً اطلاعات محرمانه یا رمزها را در چت نفرست.</p>
+                <div data-chat-message class="flex min-w-0 flex-col items-start gap-1">
+                    <div data-message-content class="bg-slate-900 border border-slate-800 text-slate-100 p-3 rounded-2xl rounded-tr-none leading-relaxed">
+                        <p>سلام! من دستیار هوشمند برهان هستم. 🤖</p>
+                        <p class="mt-2 text-xs text-slate-300">می‌توانم درباره طراحی وب، اتوماسیون با n8n، اتصال سرویس‌ها و APIها، یا شکل‌دادن به ایده و سفارش پروژه راهنمایی‌ات کنم.</p>
+                        <p class="mt-2 text-xs text-slate-400">برای پاسخ دقیق‌تر، هدفت و ابزارهایی را که استفاده می‌کنی بگو؛ لطفاً اطلاعات محرمانه یا رمزها را در چت نفرست.</p>
+                    </div>
+                    <button type="button" data-chat-copy aria-label="کپی پیام" title="کپی پیام" class="chat-copy-button inline-flex h-7 w-7 items-center justify-center self-start rounded-lg border border-slate-700/70 bg-slate-800/70 text-slate-400 shadow-sm transition hover:border-purple-400/50 hover:bg-purple-500/15 hover:text-purple-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-purple-400 active:scale-95">
+                        <i class="fa-regular fa-copy text-xs" aria-hidden="true"></i>
+                    </button>
                 </div>
             </div>
             <div role="group" aria-label="موضوعات پیشنهادی برای گفتگو" class="mr-9">
@@ -508,33 +513,8 @@
 
     <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
 
-    <script>
-        const themeToggle = document.getElementById("themeToggle");
-        const themeToggleIcon = document.getElementById("themeToggleIcon");
+  
+    <script src="/src/chat.js"></script>
 
-        function setTheme(theme) {
-            document.documentElement.dataset.theme = theme;
-            document.body.dataset.theme = theme;
-
-            const isLight = theme === "light";
-            themeToggle.setAttribute("aria-pressed", String(isLight));
-            themeToggle.setAttribute("aria-label", isLight ? "تغییر به حالت تاریک" : "تغییر به حالت روشن");
-            themeToggle.setAttribute("title", isLight ? "تغییر به حالت تاریک" : "تغییر به حالت روشن");
-            themeToggleIcon.classList.toggle("fa-moon", !isLight);
-            themeToggleIcon.classList.toggle("fa-sun", isLight);
-
-            try {
-                localStorage.setItem("borhan-theme", theme);
-            } catch (error) {
-                console.warn("ذخیرهٔ انتخاب تم در دسترس نیست.", error);
-            }
-        }
-
-        setTheme(document.documentElement.dataset.theme === "light" ? "light" : "dark");
-        themeToggle.addEventListener("click", () => {
-            setTheme(document.body.dataset.theme === "light" ? "dark" : "light");
-        });
-    </script>
-<script src="./chat.js"></script>
 </body>
 </html>
