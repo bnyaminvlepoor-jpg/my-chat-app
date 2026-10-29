@@ -154,7 +154,17 @@ copyCollabSummary.addEventListener('click', async () => {
     }
 });
 
-// باز و بسته کردن پنجره چت
+// تابع کمکی برای باز کردن پنجره چت از هر جای سایت
+function openChatWindow() {
+    if (chatWindow.classList.contains('opacity-0')) {
+        chatWindow.classList.remove('opacity-0', 'pointer-events-none', 'scale-95');
+        chatWindow.setAttribute('aria-hidden', 'false');
+        chatToggle.setAttribute('aria-expanded', 'true');
+    }
+    userInput.focus();
+}
+
+// باز و بسته کردن پنجره چت با دکمه شناور
 chatToggle.addEventListener('click', () => {
     const isOpening = chatWindow.classList.contains('opacity-0');
     chatWindow.classList.toggle('opacity-0', !isOpening);
@@ -184,6 +194,7 @@ resizeChat.addEventListener('click', () => {
     setChatExpanded(!chatWindow.classList.contains('chat-window-expanded'));
 });
 
+// مدیریت کلیک روی دکمه‌های کپی داخل چت
 chatMessages.addEventListener('click', (event) => {
     if (!(event.target instanceof Element)) return;
     const copyButton = event.target.closest('[data-chat-copy]');
@@ -192,27 +203,66 @@ chatMessages.addEventListener('click', (event) => {
         if (!message) return;
 
         copyChatMessage(copyButton, message);
+    }
+});
+
+// شنونده سراسری برای دکمه‌های «بپرس از بات» و «ثبت سفارش» در کل صفحه
+document.addEventListener('click', (event) => {
+    if (!(event.target instanceof Element)) return;
+
+    // ۱. اگر روی «بپرس از بات» کلیک شد: پنجره چت باز شود و سوال بلافاصله ارسال گردد
+    const promptButton = event.target.closest('[data-chat-prompt]');
+    if (promptButton) {
+        openChatWindow();
+        userInput.value = promptButton.dataset.chatPrompt;
+        chatForm.requestSubmit();
         return;
     }
 
-    const promptButton = event.target.closest('[data-chat-prompt]');
-    if (!promptButton) return;
-
-    userInput.value = promptButton.dataset.chatPrompt;
-    chatForm.requestSubmit();
+    // ۲. اگر روی «ثبت سفارش» کارت‌ها کلیک شد: فرم شروع همکاری باز شود و نام پکیج در توضیحات بنشیند
+    const orderButton = event.target.closest('[data-order-package]');
+    if (orderButton) {
+        const packageName = orderButton.dataset.orderPackage;
+        collabStatus.classList.add('hidden');
+        collabModal.showModal();
+        const detailsField = collabForm.querySelector('[name="details"]');
+        if (detailsField) {
+            detailsField.value = `متقاضی سفارش: ${packageName}\n`;
+        }
+        collabName.focus();
+    }
 });
 
-// ارسال پیام جدید
+// تابع اسکنر خودکار: خواندن اطلاعات و قیمت‌های کارت‌های محصول از داخل صفحه HTML
+function getSiteProductsContext() {
+    const cards = document.querySelectorAll('[data-product-card]');
+    if (!cards.length) return '';
+
+    const productsList = Array.from(cards).map((card, index) => {
+        const title = card.querySelector('h3')?.innerText.trim() || '';
+        const desc = card.querySelector('p')?.innerText.trim() || '';
+        const price = card.querySelector('.mt-auto > div')?.innerText.trim() || '';
+        return `${index + 1}. ${title} | توضیحات: ${desc} | قیمت: ${price}`;
+    });
+
+    return `\n\n[اطلاعات سیستم - لیست پکیج‌ها و قیمت‌های فعلی موجود در سایت برهان که باید بر اساس آن‌ها به مشتری پاسخ دهی:\n${productsList.join('\n')}]`;
+}
+
+// ارسال پیام جدید به n8n
 chatForm.addEventListener('submit', async (e) => {
     e.preventDefault();
     const message = userInput.value.trim();
     if (!message) return;
 
+    // به مشتری فقط پیام تمیز خودش را در حباب چت نشان می‌دهیم
     appendMessage(message, 'user');
     userInput.value = '';
 
     typingIndicator.classList.remove('hidden');
     chatMessages.scrollTop = chatMessages.scrollHeight;
+
+    // اما در پشت صحنه، لیست محصولات سایت را هم ضمیمه نامه می‌کنیم تا ربات از قیمت‌ها باخبر باشد
+    const enrichedMessage = message + getSiteProductsContext();
 
     try {
         // دقت کن: اگر در حساب جدیدت آدرس وب‌هوک عوض شده، این لینک را آپدیت کن
@@ -220,7 +270,7 @@ chatForm.addEventListener('submit', async (e) => {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
-                user_request: message,
+                user_request: enrichedMessage,
                 name_user: "مشتری وب‌سایت",
                 user_feedback: "",
                 session_id: sessionId
@@ -278,10 +328,9 @@ function appendMessage(text, sender) {
         avatar.appendChild(icon);
 
         const messageBubble = document.createElement('div');
-        messageBubble.className = "bg-slate-900 border border-slate-800 text-slate-100 p-3 rounded-2xl rounded-tr-none leading-relaxed [&_ul]:list-disc [&_ul]:mr-6 [&_ol]:list-decimal [&_ol]:mr-6 [&_li]:mb-2";
+        messageBubble.className = "bg-slate-900 border border-slate-800 text-slate-100 p-3 rounded-2xl rounded-tr-none leading-relaxed [&_ul]:list-disc [&_ul]:mr-6 [&_ol]:list-decimal [&_ol]:mr-6 [&_li]:mb-2 [&_pre]:bg-slate-950 [&_pre]:p-3 [&_pre]:rounded-xl [&_pre]:overflow-x-auto [&_pre]:text-left [&_pre]:dir-ltr";
         messageBubble.dataset.messageContent = '';
 
-        // اول حباب خالی را در صفحه می‌گذاریم و بعد ماشین‌تحریر را روشن می‌کنیم
         messageGroup.append(messageBubble, createCopyButton());
         wrapper.append(avatar, messageGroup);
         chatMessages.appendChild(wrapper);
@@ -299,7 +348,6 @@ function typeWriterEffect(text, element, speed = 20) {
     function type() {
         if (i < text.length) {
             i++;
-            // برش متن تا حرفِ فعلی و تبدیل زنده‌ی آن به فرمت زیبای مارک‌داون
             element.innerHTML = marked.parse(text.slice(0, i));
             chatMessages.scrollTop = chatMessages.scrollHeight;
             setTimeout(type, speed);
